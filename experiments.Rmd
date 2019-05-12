@@ -1,0 +1,580 @@
+---
+title: "Experiments"
+output: 
+  pdf_document:
+          number_sections: yes
+          includes:
+              in_header: design/libs.tex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error= TRUE)
+library(reticulate)
+setwd("C:/Users/Deren/Desktop/graduation_project")
+use_python("C:/Users/Deren/Anaconda3")
+```
+
+# Experiments
+
+## Correlation Between Foreign Language Knowledge and Listening Foreing Music
+
+The main purpose of this experiment is to examine whether there is a relationship betweeen knowledge of foreign language and listining of foreign music ratios.  We accepted English as a foreign language because of globalization. For doing this experiment, English knowledge statistics on country basis were required and we reached this data from Wikizero. This resource includes the ratio of English knowledge, which is an additional language for many countries. We created a table containing the rates of English knowledge of the countries that match the our data countries by extracting the countries whose native language is English.
+
+Another aim in this experiment is to estimate the rate of  English knowledge for other countries if the correlation is high for the relevant 24 countries.
+
+("http://www.wikizero.biz/index.php?q=aHR0cHM6Ly9lbi53aWtpcGVkaWEub3JnL3dpa2kvTGlzdF9vZl9jb3VudHJpZXNfYnlfRW5nbGlzaC1zcGVha2luZ19wb3B1bGF0aW9u")
+
+
+
+```{r, warning=FALSE,error=FALSE, message=FALSE, echo=FALSE}
+library(dplyr)
+library(xlsx)
+df <- read.xlsx("data/language_knowledge.xlsx",1) %>% rename(RegionName=Region_Name, English_Knowledge_Ratio=Language_Knowledge)
+
+knitr::kable(df, caption = 'Knowledge of English Ratios'
+)
+```
+
+Before we go into the correlation calculation, we need to create the variables such as region and track language that are missing in raw data but will be needed.
+
+
+#### Detection of Region Language 
+
+In order to calculate the rate of listening the foreign music on a country basis, we need to know the national language(s) of the countries. We created the region language variable by using the table where ISO 3166-1 country codes match the ISO 639-1 language codes. ("https://wiki.openstreetmap.org/wiki/Nominatim/Country_Codes")
+
+```{r, warning=FALSE,error=FALSE, message=FALSE, echo=FALSE}
+library(dplyr)
+
+df <- read.csv("data/spotify_languages.csv", encoding="UTF-8") %>%  select(-X) %>% 
+  rename(RegionName=Region_Name,RegionLanguage=Region_Language,TrackName=Track_Name) %>% 
+  distinct(RegionName, .keep_all = TRUE) %>% select(-Artist)
+
+knitr::kable(
+  df[1:10,], caption = 'Spotify Data With Region Language'
+)
+```
+
+
+### Detection of Track Language 
+
+Another missing point was that we did not know the languages of the tracks in raw data. I have searched the Python and R libraries which give the language as output when the word or sentence is given as input. In R, CLD3 (Compact Language Detector 3) and textcat  libraries can be used to detect language.
+ 
+CLD3 is a neural network model for language identification. This package contains the inference code and a trained model. The inference code extracts character n-grams from the input text and computes the fraction of times each of them appears. The other library, textcat, has language profiles for 75 languages and some of the algorithms at its core have been  used inside Spamassassin.  It can be manipulated using language profiles and various options among which the selection of a distance function.
+
+ 
+**cld3 libraryu example**
+ 
+```{r, warning=FALSE,error=FALSE, message=FALSE}
+library(cld3)
+text <- c("Rechtdoor gaan, dan naar rechts.",
+"Türkiye'nin üç tarafı denizlerle çevrili.",
+"I live in the countryside",
+"Questa frase non è scritta in Napoletano.",
+"Das ist ein deutscher satz.",
+"La vie est magnifique",
+"El jugador está predispuesto a que será un partido complicado.",
+"Jar kan ikke snakke Norsk","Bom dia")
+detect_language(text)
+```
+ 
+**textcat library example**
+
+```{r, warning=FALSE,error=FALSE, message=FALSE}
+
+library(textcat) 
+
+text <- c("Rechtdoor gaan, dan naar rechts.",
+"Türkiye'nin üç tarafı denizlerle çevrili.",
+"I live in the countryside",
+"Questa frase non è scritta in Napoletano.",
+"Das ist ein deutscher satz.",
+"La vie est magnifique",
+"El jugador está predispuesto a que será un partido complicado.",
+"Jar kan ikke snakke Norsk","Bom dia" )
+textcat(text)
+``` 
+
+After investigating the R libraries, we wanted to see what the language detection libraries in Python environment were and how they were compared to R. We found out that langdetect library is one derived directly from Google language detection. This Python library seems to be well alive and maintained. It claims it can detect 55 languages out of the box and upon a simple call to the function “detect” will return the two letter ISO 639-1 code of the language detect while a call to detect_lang will return a  vector of probabilities strings. There are alternative detection libraray, langid, in Python as well as in R. This library pre-trained over a large number of languages (currently 97) and not sensitive to domain-specific features (e.g. HTML/XML markup). classify() function of this libratay can be used to get the most likely language and its “score”. 
+
+
+
+```{python, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+import langdetect
+documents = ["Rechtdoor gaan, dan naar rechts.",
+"Türkiye'nin üç tarafı denizlerle çevrili.",
+"I live in the countryside",
+"Questa frase non è scritta in Napoletano.",
+"Das ist ein deutscher satz.",
+"La vie est magnifique",
+"El jugador está predispuesto a que será un partido complicado.",
+"Jar kan ikke snakke Norsk","Bom dia"]
+
+for line in documents:
+ print(langdetect.detect_langs(line))
+```
+
+
+```{python, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+import langid
+documents = ["Rechtdoor gaan, dan naar rechts.",
+"Türkiye'nin üç tarafı denizlerle çevrili.",
+"I live in the countryside",
+"Questa frase non è scritta in Napoletano.",
+"Das ist ein deutscher satz.",
+"La vie est magnifique",
+"El jugador está predispuesto a que será un partido complicado.",
+"Jar kan ikke snakke Norsk","Bom dia"]
+
+for line in documents:
+ print(langid.classify(line))
+```
+
+
+Comparing the results of the language sensing of the libraries in both R and python, we see that there is no big difference between the accuracy, but the langdetect library has reached the most correct result with the probability information. I also considered the Python’s NLTK library (Natural Language Toolkit), but the scope of the power of this library seems to be beyond our quest for a quick language detection solution therefore I did not compared with others. As a result, using the langid.classify() function of the langdetect library of python, song languages have been identified with the probability of estimation. The tracks with the language estimation rate of 50 and below were extracted from the data in the experimental phase.
+
+```{r, warning=FALSE, error=FALSE, message=FALSE, echo=FALSE}
+library(xlsx)
+df <- read.csv("data/with_track_language.csv", encoding="UTF-8") %>% select(-X)
+
+language_code_to_language <- read.xlsx("data/language_code_to_language.xlsx",1) %>%  rename(Track_Language=Language_Code)
+
+df %<>% left_join(language_code_to_language, by="Track_Language") %>%
+  select(-Track_Language) %>% 
+  rename(Track_Language=Language_Name, Score=Language_Score) %>% filter(Track_Name!="") %>% 
+  rename(RegionName=Region_Name,RegionLanguage=Region_Language,TrackName=Track_Name,TrackLanguage=Track_Language) %>% 
+  filter(RegionName=="Turkey") %>% arrange(Streams) %>% 
+  select(Date, RegionName, RegionLanguage, TrackName,TrackLanguage,Score,Score) %>% arrange(Date, RegionName)
+
+
+knitr::kable(
+  df[1:10,], caption = 'Spotify Data With Track Language'
+)
+```
+
+
+### Language Flagging 
+
+At this stage, we created the flag variable by assigning 0 to the different ones and 1 to the same ones to show whether the languages of the songs and the local languages are the same. For countries with multiple official languages, we  assigned 1 if the language of the song is one of the official languages.
+
+```{r, warning=FALSE, error=FALSE, message=FALSE, echo=FALSE}
+df <- read.csv("data/flagged_track_language.csv", encoding="UTF-8")
+
+df %<>%rename(RegionName=Region_Name,RegionLanguage=Region_Language,TrackName=Track_Name,TrackLanguage=Track_Language) %>%
+  filter(RegionName=="Turkey") %>% arrange(Streams) %>%
+  select(Date, RegionName, RegionLanguage, TrackName,TrackLanguage,flag)
+ 
+knitr::kable(
+  df[1:10,], caption = 'Flagged Spotify Data'
+)
+```
+
+### Correlation 
+
+We had foreign language knowledge, but we had to calculate the rate of listening to music in different languages by using the generated flag variable. For each country, we created this variable by dividing the number of music in the different language by the total number of music. Afterwards, we calculated the correlation between the rate of knowledge of English and listening to foreign music by using cor() function of the stats library.
+
+```{r, warning=FALSE, error=FALSE, message=FALSE, echo=FALSE}
+library(stats)
+df <- read.csv("data/analysis_1.4_data.csv", encoding="UTF-8") %>% rename(Listening_of_Foreign_Music=different_language_ratio
+                                                                  ,Knowledge_of_English= Language_Knowledge)
+knitr::kable(df, caption = 'Region With Ratios')
+cor=cor(df$Listening_of_Foreign_Music,df$Knowledge_of_English)
+print(paste0("Correlation: ", cor))
+
+```
+
+
+## Paired t-test 
+
+In this experiment, it is aimed to measure whether there is a difference between the types of music that is listened during the weekends and week days. First of all we had to identify the genres therefore we searched the Spotify APIs that give tracks genre. Because we have track ids we started to investigate Tracks API of Spotify. Then, we noticed that we couldn't reach the tracks genres directly from the Track API which gives various information with the track such as artist, album, release date, available regions. While researching other apis, we found that we can access the artists genre from the Artists API. We decided to create the track genre varaible by accepting the  artists genre as the tracks genre. "https://developer.spotify.com/console/artists/"
+
+### Getting Artist Id from Spotify Tracks API
+
+
+Data files can be stored locally in our system or in our working directory, or a scenario where these files are stored on a remote server. Remote servers just the part of a remotely located computer that is optimized to process requests.
+In the cases that the data is stored on the remote servers, it is no longer available in expected file formats, such as .txt, .csv, .excel, and the most common form in which data is stored on the Web can be json, xml, html.When we want to access and work on Web Data, we can call the corresponding API using HTTP clients in R.
+
+**HTTP**: Hypertext Transfer Protocol (HTTP) is designed to enable communications between clients and servers. There are many possible HTTP methods used to reach an API, below are the most commonly used:
+
+
+**GET:** is used to request data from a specified resource.
+
+**POST:** is used to send data to a server to create/update a resource.
+
+In order to request and parse the data, we made use of R's httr and rjson libraries.
+
+The httr library was builted on the six basic http methods: GET (), PATCH (), POST (), HEAD (), PUT (), and DELETE (). Each request returns a response () object that provides access to various information. The output of the request can be used as a raw vecor, character vector or as well as parsed to an R object for html, xml, json, png and jpeg. Configuration functions make it easier to modify the request in common ways: set_cookies(), add_headers(), authenticate(), use_proxy(), verbose(), timeout(), content_type(), accept(), progress(). This library supports for OAuth 1.0 and 2.0 with oauth1.0_token() and oauth2.0_token(). 
+
+
+In our case, we have only used the GET method because we would not any create or update. In the request we made with the Get() function, we gave the the spotify track api url and authorization header as a parameter. The HTTP Authorization request header contains the credentials to authenticate a user agent with a server to not encounter 401 Unauthorized status response.
+
+
+We also used the fromJSON() function of the rjson package to make meaningful returned json objects. JSON (JavaScript Object Notation) is a way to store information in an organized, easy-to-access manner. rjosn package converts JSON objects into R objects and vice-versa. 
+
+The following example shows how to retrieve variety of track informations from the spotify track api.
+
+```{r, warning=FALSE,error=FALSE, message=FALSE}
+library(magrittr)
+library(dplyr)
+library(rjson)
+library(httr)
+library(knitr)
+
+url <- "https://api.spotify.com/v1/tracks/494OU6M7NOf4ICYb4zWCf5"
+
+get_data <- GET(url, add_headers(Authorization=" Bearer BQCbq-K7uCK9uCkqS_X7M5Ut
+HyT4rpMCFOPtGIKLqtw7QMfvulZvgYzNW_WxjTjCkNXuJoN1nPdyOlzYJu45qLxNZ3mpUMHbAO5Z19UY_
+gS9Yys86H1AFJZBQSrU5UK3CTKKENDWsQVCaB80SHIyBqTpQlIBo5L4-8GBTr8lJebCG9CueJZYg3OA1X
+LY6O2BWbWvxB7nPqtzMnQCCM3iCKc8anQTld8PbKRRzn2gAREMYIZ-HD4qiCZj5qgQirGndNhrirCgWZd
+2LTSISFh4JSFv5lmEBc585KE"))
+
+track_name <- fromJSON(get_data %>% as.character())$name
+artist_name <- fromJSON(get_data %>% as.character())$artists[[1]]$name
+artist_id <- fromJSON(get_data %>% as.character())$artists[[1]]$id
+album_name <- fromJSON(get_data %>% as.character())$album$name
+album_release_date <- fromJSON(get_data %>% as.character())$album$release_date
+album_total_tracks <- fromJSON(get_data %>% as.character())$album$total_tracks
+
+print(c(paste0("Track Name: ", track_name),
+        paste0("Artist Name: ", artist_name),
+        paste0("Artist Name: ", artist_name),
+        paste0("Artist Id: ", artist_id),
+        paste0("Album Name: ", album_name),paste0("Album Release Date: ", album_release_date),
+        paste0("Album Total Tracks Count: ", album_total_tracks)))
+
+```
+
+```{r, warning=FALSE,error=FALSE, message=FALSE,echo=FALSE}
+df <- read.csv("data/data_with_artist_id.csv") %>% select(Track.Name,Artist, Artist_id) %>%
+  rename(TrackName=Track.Name,ArtistId=Artist_id)
+
+kable(df %>% head(10))
+```
+
+### Getting Artist Genre from Spotify Artist API
+
+After identifying artist ids, we get the artists genres by requesting the artists api such as in the previous experiment.
+Where  the artist has more than one genres that are revieced from artist api , we assumed the determined first type as the  artist genre hereby that is track genre.
+
+```{r, warning=FALSE,error=FALSE, message=FALSE}
+
+url <- "https://api.spotify.com/v1/artists/04gDigrS5kc9YWfZHwBETP"
+
+get_data <- GET(url, add_headers(Authorization= "Bearer BQCbq-K7uCK9uCkqS
+_X7M5UtHyT4rpMCFOPtGIKLqtw7QMfvulZvgYzNW _WxjTjCkNXuJoN1nPdyOlzYJu45qLxNZ
+3mpUMHbAO5Z19UY_gS9Yys86H1AFJZBQSrU5UK3CTKKENDWsQVCaB80SHIyBqTpQlIBo5L4-8
+GBTr8lJebCG9CueJZYg3OA1XLY6O2BWbWvxB7nPqtzMnQCCM3iCKc8anQTld8PbKRRzn2gAREM
+YIZ-HD4qiCZj5qgQirGndNhrirCgWZd2LTSISFh4JSFv5lmEBc585KE"))
+
+
+artist_name <- fromJSON(get_data %>% as.character())$name
+artist_genres <- fromJSON(get_data %>% as.character())$genre
+total_followers_of_artist <- fromJSON(get_data %>% as.character())$followers$total
+artist_popularity <- fromJSON(get_data %>% as.character())$popularity
+
+print(c(paste0("Artist Name: ", artist_name),
+        paste0("Artist Genres: ",artist_genres),
+        paste0("Total Followers: ",total_followers_of_artist),
+        paste0("Artist Popularity: ", artist_popularity )))
+
+```
+
+
+```{r, warning=FALSE,error=FALSE, message=FALSE,echo=FALSE}
+
+df <- read.csv("data/data_with_artist_genres.csv") %>% rename(ArtistGenre=Artist_Genres)
+kable(df %>%  head(20))
+```
+
+### Paired t-test 
+
+Firstly, we categorized the dates as weekend and weekday by utilizing the is.weekend() that is R chron package function.
+
+```{r, warning=FALSE,error=FALSE, message=FALSE,echo=FALSE}
+
+library(chron)
+library(tidyr)
+library(xlsx)
+library(broom)
+library(stats)
+
+setwd("C:/Users/Deren/Desktop/graduation_project")
+
+genres <- read.csv("data/data_with_artist_genres.csv") %>% distinct(Artist, .keep_all = TRUE) 
+
+df <- read.csv("data/data.csv")%>% rename(Track_Name=Track.Name)
+
+data <- left_join(df,genres, by="Artist")
+
+data %<>% select(Date,Region,Track_Name,Artist,Artist_Genres,Streams) %>% mutate(weekends=is.weekend(Date))
+
+temp_data <- read.xlsx("data/country_to_language_code.xlsx",1) %>% rename(Region=Region_Code) %>% select(-Language_Code)
+
+df<-left_join(data,temp_data,by="Region") %>% select(Date,Region_Name,Track_Name,Artist,Artist_Genres,Streams,weekends)
+
+df %<>% mutate(flag= case_when(weekends==TRUE ~ "Weekends",weekends==FALSE ~ "Weekday")) %>% select(-weekends) %>% select(Date,flag) %>% distinct(Date, .keep_all = TRUE) %>% rename(`Weekend/Weekday`=flag)
+
+kable(df %>%  head(
+  20))
+```
+
+Then, we found stream ratios of the genres grouped by region and weekend/weekday variables.
+
+```{r, warning=FALSE,error=FALSE, message=FALSE,echo=FALSE}
+
+df <- read.csv("data/analysis_2.3_data.csv") %>% select(-X)
+
+kable(df %>% head(20))
+```
+
+we used the t.test() function of stats package to calculate paired t test coefficients.
+
+```{r, warning=FALSE,error=FALSE, message=FALSE,echo=FALSE}
+res <- t.test(df$Weekday, df$Weekends, paired = TRUE)
+print(res)
+```
+
+
+## Visualization
+
+Maps are used in a variety of fields to express data in an appealing and interpretive way. Data can be expressed into simplified patterns, and this data interpretation is generally lost if the data is only seen through a spread sheet. Maps can add important context by incorporating many variables into an easy to read and applicable context. Maps are also very important in the information world because they can quickly allow the public to gain better insight so that they can stay informed. 
+
+### Choropleth Map 
+
+In this experiment, we created choropleth maps to compare the listening rates of pop, latin, rock and rap/hiphop genres based on 53 countries in data. A choropleth map displays divided geographical areas or regions that are coloured in relation to a numeric variable. It allows to study how a variable evolutes along a territory. It is a powerful and widely used data visualization technique. The nueric variable uses colour progression to represent itself in each region of the map. Typically, this can be a blending from one colour to another, a single hue progression, transparent to opaque, light to dark or an entire colour spectrum. While creating choropleth maps we utilized R's two  mapping packages: ggplot2, viridis. As in the previous sections, let's deep into the details of these packages.
+
+The ggplot2 package, created by Hadley Wickham, offers a powerful graphics language for creating elegant and complex plots. Origianlly based on Leland Wilkinson's The Grammar of Graphics, ggplot2 allows us to create graphs that represent both univariate and multivariate numerical and categorical data in a straightforward manner. Grouped variables  can be represented by color, symbol, size, and transparency. ggplot2 graphics are built step by step by adding new elements. Adding layers  allows for extensive flexibility and customization of plots. To build a ggplot, we used the following template that can be used for different types of plots:
+
+**ggplot(data = <DATA>, mapping = aes(MAPPINGS)) + GEOM_FUNCTION()**
+
+Knowing what elements are required to enhance data is key into making effective maps. Basic elements of a map that can  be considered are polygon, points, lines, and text. Polygons are very similar to paths except that the start and end points
+are connected and the inside is coloured by fill. Lines are considered to be linear shapes that are not filled with any aspect, such as highways, streams, or roads. Points are used to specify specific positions, such as city or landmark locations. We used polygons element (geom_polygon()) to frame and color countries with latitude and longitude that are defined in aes parameter.
+
+map_data() generates the map data with logitude and latitiude grouped by subregion. It requires the maps package. Specific continents countries, world map data can be created with this function.
+
+geom_polygon() creates the map. In the following examples, the countries are colored by assigning the region to the fill argument.
+
+
+```{r, warning=FALSE,error=FALSE, message=FALSE}
+library(ggplot2)
+require(maps)
+
+worldmap = map_data("world")
+
+ggplot(worldmap, aes(long, lat, group=group, fill=region)) + 
+geom_polygon(show.legend = F) +
+ggtitle("World Map")
+
+some.eu.countries <- c(
+"Portugal", "Spain", "France", "Switzerland", "Germany",
+"Austria", "Belgium", "UK", "Netherlands",
+"Denmark", "Poland", "Italy", 
+"Croatia", "Slovenia", "Hungary", "Slovakia",
+"Czech republic"
+)
+
+europemap <- map_data("world", region = some.eu.countries)
+
+ggplot(europemap, aes(x = long, y = lat)) +
+geom_polygon(aes( group = group, fill = region),color = "white")+
+ggtitle("Europe Map")
+
+```
+
+The viridis package presents various color scales for maps. From the these color scales 'viridis', 'magma', 'plasma',
+and 'inferno'are moved from Python's  plotting library matplot and  'cividis' was developed by Jamie R, Nuñez and Sean M. Colby. As using the scale_fill_viridis() function of the viridis package, we created a world map that colors the countries according to the percentage of countries' life expectancy at birth in 2015. We reached this data from  WHO (World Health Organozation) data frame using the WHO package. We see that life expectancy at birth increases as passing from purple to yellow. For instance, we can infer from this map that life expectancy rates of neighboring countries are similar.
+
+
+```{r, warning=FALSE,error=FALSE, message=FALSE}
+library(WHO)
+library(viridis)
+
+life.exp <- get_data("WHOSIS_000001")           
+life.exp <- life.exp %>%
+filter(year == 2015 & sex == "Both sexes") %>%  
+select(country, value) %>%                      
+rename(region = country, lifeExp = value) %>% 
+mutate(region = ifelse(region == "United States of America", "USA", region) )        
+
+world_map <- map_data("world")
+life.exp.map <- left_join(life.exp, world_map, by = "region")
+
+kable(life.exp %>% arrange(region) %>% head(15))
+
+ggplot(life.exp.map, aes(long, lat, group = group))+
+geom_polygon(aes(fill = lifeExp ), color = "white")+
+scale_fill_viridis(option = "plasma")
+
+```
+
+Consequently, using the methods exemplified, we generated four world maps that show the listening rates of pop, latin, rock and rap genres in the countries. we have calculated the ratios by gathering the sub-types of pop, rock, latin, rap-hiphop in these 4 types.
+
+
+```{r, warning=FALSE,error=FALSE, message=FALSE, echo=FALSE}
+
+library(dplyr)
+
+df <- read.csv("data/analysis_3.1_data.csv") %>% dplyr::select(-X)
+
+world_map <- map_data("world")
+
+temp <- df %>% filter(Artist_Genres=="pop")
+worldmap_joined <- left_join(world_map, temp, by = c('region' = 'Region_Name'))
+ggplot(data = worldmap_joined, aes(x = long, y = lat, group = group)) +
+geom_polygon(aes(fill = GenreRatio)) + scale_fill_viridis(option = 'plasma') + 
+labs(title = "pop", subtitle = "") + 
+theme()
+
+temp <- df %>% filter(Artist_Genres=="latin")
+worldmap_joined <- left_join(world_map, temp, by = c('region' = 'Region_Name'))
+ggplot(data = worldmap_joined, aes(x = long, y = lat, group = group)) +
+geom_polygon(aes(fill = GenreRatio)) + scale_fill_viridis(option = 'plasma') + 
+labs(title = "latin", subtitle = "") + 
+theme()
+temp <- df %>% filter(Artist_Genres=="rock")
+worldmap_joined <- left_join(world_map, temp, by = c('region' = 'Region_Name'))
+ggplot(data = worldmap_joined, aes(x = long, y = lat, group = group)) +
+geom_polygon(aes(fill = GenreRatio)) + scale_fill_viridis(option = 'plasma') + 
+labs(title = "rock", subtitle = "") + 
+theme()
+temp <- df %>% filter(Artist_Genres=="rap-hiphop")
+worldmap_joined <- left_join(world_map, temp, by = c('region' = 'Region_Name'))
+ggplot(data = worldmap_joined, aes(x = long, y = lat, group = group)) +
+geom_polygon(aes(fill = GenreRatio)) + scale_fill_viridis(option = 'plasma') + 
+labs(title = "rap-hiphop", subtitle = "") + 
+theme()
+```
+
+
+### Pie Chart 
+
+
+```{r, warning=FALSE,error=FALSE, message=FALSE,echo=FALSE}
+
+library(maptools)
+library(raster)
+library(rgdal)
+library(ggmap)
+library(scatterpie)
+library(dplyr)
+
+df <- read.csv("data/analysis_3.2_data.csv") %>% dplyr::select(-X)
+
+worldmap <- map_data("world")
+cc <- ccodes()
+
+mappings <- c("UK"="United Kingdom", "USA"="United States")
+
+cc$NAME[match(mappings, cc$NAME)] <- names(mappings)
+
+worldmap <- left_join(worldmap, cc[,c("NAME","continent")], by=c("region"="NAME"))
+
+data  <- df %>% spread(key=Artist_Genres, value=GenreRatio) %>% 
+dplyr::select(Region_Name,longitude,latitude, `rap-hiphop`,latin,pop,rock ) %>% 
+distinct(pop, .keep_all = TRUE) %>% mutate(group=c(1:53)) %>% 
+mutate(group=as.factor(group)) %>% left_join(worldmap  %>% 
+dplyr::select(region,continent), by=c("Region_Name"="region"))
+
+continent <- worldmap %>% filter(continent=="South America")
+
+temp <- data %>% filter(continent=="South America") %>% dplyr::select(-continent)
+
+ggplot(continent,aes(x=long, y=lat, group=group) ) +
+geom_polygon(fill=NA, color="black")+
+geom_scatterpie(aes(x=longitude, y=latitude, group=Region_Name,  r=3.5), data = temp,
+cols = c("rap-hiphop","latin","pop","rock"),color=NA)+
+labs(title = "South America", subtitle = "") + 
+theme()
+
+
+```
+
+
+##Markov Chain
+
+Using the markov model we have mentioned in the theory section, we predicted what is the most listened genre in the global for each week. First of all, for 53 weeks, we determined the most listened genre from the most listened track in the world.
+The popular genres in 53 weeks: pop, dance pop, latin and conscious hip hop.
+
+To create Markov Chain transition matrix, we also created the Iterative_Genre variable that indicate the most listened genre of the previous week.
+
+```{r,echo=FALSE,warning=FALSE,error=FALSE, message=FALSE}
+
+setwd("C:/Users/Deren/Desktop/graduation_project")
+
+datdata_base_global <- read.csv("data/analysis_4_data.csv") %>% dplyr::select(-X)
+
+for(i in 2:nrow(datdata_base_global)){
+datdata_base_global$Iterative_Genre[i]<-datdata_base_global$Genre[i-1] %>% as.character()
+}
+
+datdata_base_global %<>% mutate(Genre=as.character(Genre),Iterative_Genre=as.character(Iterative_Genre))
+
+kable(datdata_base_global %>% head(20))
+
+```
+
+In R, table() function build a contingency table of the counts at each combination of factor levels by using the cross-classifying factors. To compute the transition counts of genres in 53 weeks , we used the table function that produces below table. 
+
+
+```{r,echo=FALSE,warning=FALSE,error=FALSE, message=FALSE}
+library(markovchain)
+
+datdata_base_global$Iterative_Genre[1]<-datdata_base_global$Genre[53] %>% as.character()
+
+matrix <- table(datdata_base_global$Genre,datdata_base_global$Iterative_Genre) %>% as.matrix()
+
+class(matrix) <- "matrix"
+
+knitr::kable(matrix %>% as.data.frame())
+
+```
+
+After then, we created the transition ratios matrix by dividing the values in the resulting table by the sum of rows. 
+Transitio ratios table describing the probabilities of moving from first week to last week. The entries in the first row of the table represent the probabilities for the various kinds of genres following a conscious hip hop. Similarly, the entries in the second, third and last rows represent the probabilities for the various kinds of genres following dance pop, latin and pop  genres, respectively.
+
+```{r,echo=FALSE,warning=FALSE,error=FALSE, message=FALSE}
+matrix <- matrix/rowSums(matrix) 
+knitr::kable(matrix %>% as.data.frame())
+
+```
+
+We took advantage of R' markovchain package that  provides classes, methods and function for  handling Discrete Time Markov Chains (DTMC), performing probabilistic analysis and fitting. The markovchain objects can be created with new() function, as the following code shows. One of the R's core functions new() returns a newly allocated object from the class identified by the first argument.  This function checks that the  matrix to be a transition matrix, i.e., all entries to be probabilities and either all rows or all columns to sum up to one and the columns and rows names of transition matrix to be defined and to coincide with states vector slot. https://cran.r-project.org/web/packages/markovchain/vignettes/an_introduction_to_markovchain_package.pdf
+
+
+```{r,warning=FALSE,error=FALSE, message=FALSE}
+library(markovchain)
+
+dtmcA <- new("markovchain",transitionMatrix=matrix,
+states=,
+name="MarkovChain")
+
+plot(dtmcA)
+
+```
+
+After finding the transition probabilities of genres, we estimated the week's genres by using sample() function of R base that takes a sample of the specified size from the elements of x using either with or without replacement. The prob argument of the function weighs the obtaining the elements of the vector being sampled according to the given probabilities. Finally, we have found the accuracy value of the experiment by dividing the correct estimates to the all.
+
+```{r,echo=FALSE,warning=FALSE,error=FALSE, message=FALSE}
+
+datdata_base_global %<>% mutate(predicted_genre="") 
+
+for(i in 1:nrow(datdata_base_global)){
+  genre <- datdata_base_global$Genre[i]
+  probs <- dtmcA[genre] %>% as.vector()
+  predicted_genre <- sample(states(dtmcA), size=1,replace=TRUE,prob=probs)
+  datdata_base_global$predicted_genre[i] <- predicted_genre
+  
+}
+
+kable(datdata_base_global %>% dplyr::select(week,Genre,predicted_genre) %>% 
+        rename(PredictedGenre=predicted_genre) %>% head(20))
+datdata_base_global %<>% mutate(flag=if_else(Iterative_Genre==predicted_genre,1,0)) %>% dplyr::select(-Iterative_Genre)
+
+prob <- sum(datdata_base_global$flag)/nrow(datdata_base_global)
+
+print(paste0("Accuracy: ", prob))
+
+```
+
+
+
+
